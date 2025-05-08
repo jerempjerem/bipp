@@ -47,9 +47,11 @@ class Controller(Node):
     number = 0
 
     checkpoints = [
-        # [0, 1, 0, 5],
-        [1, 0, 0, 5],
-        ]
+        [1, 0, 1.5708, 5],     # Avance d'un mètre vers la droite, tourne de 90° (pi/2 radians)
+        [1, 1, 3.1416, 5],     # Avance d'un mètre vers le haut, tourne de 90° (pi radians)
+        [0, 1, -1.5708, 5],    # Avance d'un mètre vers la gauche, tourne de -90° (-pi/2 radians)
+        [0, 0, 0, 5]           # Retour au point de départ, orientation initiale
+    ]
 
     pid_a = PID(
         Kp= 0.625,
