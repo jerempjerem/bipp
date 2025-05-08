@@ -6,7 +6,7 @@ import serial
 from geometry_msgs.msg import Twist
 from nav_msgs.msg import Odometry
 from struct import unpack
-from numpy import sin, cos, degrees, radians, pi, clip
+from numpy import sin, cos, pi, clip
 from tf_transformations import quaternion_from_euler
 from geometry_msgs.msg import Quaternion
 

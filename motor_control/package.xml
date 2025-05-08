@@ -3,12 +3,22 @@
 <package format="3">
   <name>motor_control</name>
   <version>0.0.0</version>
-  <description>TODO: Package description</description>
+  <description>Package for motor control nodes: controller and twist_interface</description>
   <maintainer email="jerem830@icloud.com">jerem</maintainer>
   <license>TODO: License declaration</license>
 
+  <!-- ROS2 dependencies -->
   <depend>rclpy</depend>
+  <depend>geometry_msgs</depend>
+  <depend>nav_msgs</depend>
+  <depend>tf_transformations</depend>
 
+  <!-- Python dependencies -->
+  <exec_depend>python3-numpy</exec_depend>
+  <exec_depend>python3-simple-pid</exec_depend>
+  <exec_depend>python3-serial</exec_depend>
+
+  <!-- Test dependencies -->
   <test_depend>ament_copyright</test_depend>
   <test_depend>ament_flake8</test_depend>
   <test_depend>ament_pep257</test_depend>

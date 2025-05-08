@@ -20,6 +20,8 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
+            'controller = motor_control.controller:main',
+            'twist_interface = motor_control.twist_interface:main',
         ],
     },
 )
