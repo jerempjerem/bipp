@@ -15,7 +15,7 @@ import json
 from simple_pid import PID
 
 # Constantes de contrôle
-ANGLE_TOL = 0.2  # Tolérance d'angle en radians
+ANGLE_TOL = 0.4  # Tolérance d'angle en radians
 POS_TOL = 0.01   # Tolérance de position en mètres
 MAX_ANG_SPEED = 40  # Vitesse angulaire maximale en degrés/s
 MAX_LIN_SPEED = 0.05  # Vitesse linéaire maximale en m/s
