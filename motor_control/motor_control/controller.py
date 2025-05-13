@@ -93,6 +93,7 @@ class Controller(Node):
         self.paused = False
         self.index = 0
         self.number = 0
+        self.current_goal_index = 0  # Ajout d'un index pour suivre le point actuel
         
         # Points de contrôle par défaut
         self.checkpoints = [
@@ -130,7 +131,8 @@ class Controller(Node):
                 f"Position: x={self.current_pose[0]:.3f}m, "
                 f"y={self.current_pose[1]:.3f}m, "
                 f"θ={degrees(self.current_pose[2]):.1f}°, "
-                f"Intervalle={self.interval:.1f}s"
+                f"Intervalle={self.interval:.1f}s, "
+                f"Point actuel={self.current_goal_index}/{len(self.checkpoints)}"
             )
             self.last_log_time = current_time
 
@@ -169,14 +171,14 @@ class Controller(Node):
         if self.paused:
             self.get_logger().debug("Exécution en pause")
             return False
-        elif self.time_res != 0:
-            self.time_res = 0
-            time_diff = (self.time_paused - self.last_run + now - self.time_res)
-            self.get_logger().debug(f"Temps écoulé: {time_diff:.2f}s, Intervalle: {self.interval}s")
-            return time_diff > self.interval
+            
         time_diff = (now - self.last_run)
         self.get_logger().debug(f"Temps écoulé: {time_diff:.2f}s, Intervalle: {self.interval}s")
-        return time_diff > self.interval
+        
+        if time_diff >= self.interval:
+            self.get_logger().info(f"Temps écoulé ({time_diff:.2f}s) >= intervalle ({self.interval}s)")
+            return True
+        return False
 
     def move(self, angle=0, dist=0):
         """
@@ -259,17 +261,22 @@ class Controller(Node):
         Args:
             current_ts (float): Timestamp actuel
         """
-        self.last_run = current_ts
         if not self.checkpoints:
             self.get_logger().warn("Aucun point de contrôle disponible")
             return
+            
         self.goal = np.array(self.checkpoints.pop(0))
         self.interval = self.goal[3]
+        self.current_goal_index += 1
+        
         self.get_logger().info(
-            f"Nouveau point de contrôle: x={self.goal[0]:.2f}m, "
-            f"y={self.goal[1]:.2f}m, θ={degrees(self.goal[2]):.1f}°, "
-            f"intervalle={self.interval}s"
+            f"Nouveau point de contrôle {self.current_goal_index}: "
+            f"x={self.goal[0]:.2f}m, y={self.goal[1]:.2f}m, "
+            f"θ={degrees(self.goal[2]):.1f}°, intervalle={self.interval}s"
         )
+        
+        # Réinitialiser le temps de dernière exécution
+        self.last_run = current_ts
 
     def step_prep(self, tunings):
         """
@@ -376,7 +383,7 @@ class Controller(Node):
             self._log_position()
             
             if self.should_exec(now):
-                self.get_logger().info("Exécution d'une nouvelle commande")
+                self.get_logger().info(f"Exécution d'une nouvelle commande (point {self.current_goal_index + 1})")
                 if not self.checkpoints:
                     self.get_logger().info("Trajectoire terminée")
                     break
@@ -385,9 +392,6 @@ class Controller(Node):
                 self.orient_chkpt()
                 self.forward_target()
                 self.orient_target()
-                
-                # Réinitialiser le temps de dernière exécution
-                self.last_run = now
 
 def main(args=None):
     """Point d'entrée principal"""
