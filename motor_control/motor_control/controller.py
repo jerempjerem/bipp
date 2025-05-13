@@ -69,23 +69,17 @@ class Controller(Node):
 
         # Initialize control parameters
         self.msg_twist = Twist()
-        self.last_run = 0
-        self.interval = 10
         self.period = 0.1
-        self.time_paused = 0
-        self.time_res = 0
-        self.paused = False
-        self.index = 0
         self.number = 0
         self.last_odometry_log = 0
         self.checkpoint_start_time = time.time()
 
         # Default checkpoints if no file provided
         self.checkpoints = [
-            [1, 0, 1.5708, 5],     # Move 1m right, rotate 90°
-            [1, 1, 3.1416, 5],     # Move 1m up, rotate 180°
-            [0, 1, -1.5708, 5],    # Move 1m left, rotate -90°
-            [0, 0, 0, 5]           # Return to start, initial orientation
+            [1, 0, 1.5708],     # Move 1m right, rotate 90°
+            [1, 1, 3.1416],     # Move 1m up, rotate 180°
+            [0, 1, -1.5708],    # Move 1m left, rotate -90°
+            [0, 0, 0]           # Return to start, initial orientation
         ]
 
         # Initialize PID controller for angular control
@@ -112,7 +106,6 @@ class Controller(Node):
                 self.checkpoints = json.load(file)['pts']
 
         self.pid_a.reset()
-        self.last_run = time.time()
         self.get_logger().info("Controller successfully started!")
 
     def odometry_listener_callback(self, msg_odom: Odometry) -> None:
@@ -144,23 +137,6 @@ class Controller(Node):
                 f"Time since checkpoint: {elapsed_time:.1f}s"
             )
             self.last_odometry_log = current_time
-
-    def should_exec(self, now: float) -> bool:
-        """
-        Check if the controller should execute the next movement.
-        
-        Args:
-            now (float): Current timestamp
-            
-        Returns:
-            bool: True if controller should execute, False otherwise
-        """
-        if self.paused:
-            return False
-        elif self.time_res != 0:
-            self.time_res = 0
-            return (self.time_paused - self.last_run + now - self.time_res) > self.interval
-        return (now - self.last_run) > self.interval
 
     def move(self, angle: float = 0, dist: float = 0) -> None:
         """
@@ -223,17 +199,10 @@ class Controller(Node):
         rel_a = np.mod(abs_a - self.current_pose[2], 2 * np.pi)
         return (rel_a - 2 * np.pi) if (rel_a > np.pi) else rel_a
     
-    def next_point(self, current_ts: float) -> None:
-        """
-        Set next checkpoint as goal.
-        
-        Args:
-            current_ts (float): Current timestamp
-        """
-        self.last_run = current_ts
+    def next_point(self) -> None:
+        """Set next checkpoint as goal."""
         self.goal = np.array(self.checkpoints.pop(0))
-        self.interval = self.goal[3]
-        self.checkpoint_start_time = time.time()  # Reset checkpoint timer
+        self.checkpoint_start_time = time.time()
         self.get_logger().info(f"Moving to next checkpoint: {self.goal}")
 
     def step_prep(self, tunings: tuple) -> None:
@@ -264,9 +233,7 @@ class Controller(Node):
         return diff_a
     
     def orient_chkpt(self) -> None:
-        """
-        Orient robot to checkpoint orientation.
-        """
+        """Orient robot to checkpoint orientation."""
         self.step_prep((KP, 0, 0))
         self.pid_a.setpoint = self.goal[2]
         while self.number < 20:
@@ -285,9 +252,7 @@ class Controller(Node):
         self.move(0, 0)
     
     def orient_target(self) -> None:
-        """
-        Orient robot towards target position.
-        """
+        """Orient robot towards target position."""
         self.step_prep((KP, 0, 0))
         while self.number < 20:
             diff_a = self.move_a_speed(self.goal_dir())
@@ -305,9 +270,7 @@ class Controller(Node):
         self.move(0, 0)
 
     def forward_target(self) -> None:
-        """
-        Move robot forward towards target position.
-        """
+        """Move robot forward towards target position."""
         self.step_prep((KP, KI, KD))
         diff_xy = self.distance()
         while self.number < 20:
@@ -331,43 +294,26 @@ class Controller(Node):
         self.move(0, 0)
 
     def loop(self) -> None:
-        """
-        Main control loop.
-        Executes navigation through checkpoints.
-        """
-        self.goal = np.array(self.checkpoints.pop(0))
-        self.interval = self.goal[3]
-        self.checkpoint_start_time = time.time()  # Initialize checkpoint timer
-        self.get_logger().info(f"Starting navigation with goal: {self.goal}")
+        """Main control loop."""
+        self.next_point()
         
         while rclpy.ok():
             rclpy.spin_once(self, timeout_sec=0)
-            now = time.time()
-            if self.should_exec(now):
-                self.orient_target()
-                self.forward_target()
-                self.orient_chkpt()
-                if len(self.checkpoints) == 0:
-                    self.get_logger().info("Navigation completed!")
-                    break
-                else:
-                    self.next_point(now)
+            self.orient_target()
+            self.forward_target()
+            self.orient_chkpt()
+            if not self.checkpoints:
+                self.get_logger().info("Navigation completed!")
+                break
+            self.next_point()
 
 def main(args=None):
-    """
-    Main entry point for the controller node.
-    
-    Args:
-        args: Command line arguments
-    """
+    """Main entry point."""
     rclpy.init(args=args)
-
     parser = argparse.ArgumentParser(description="Robot controller node")
     parser.add_argument("file_path", nargs='?', type=Path, default=None,
                        help="Path to checkpoint configuration file")
-    args = parser.parse_args()
-
-    controller = Controller(chkpts_file=args.file_path)
+    controller = Controller(chkpts_file=parser.parse_args().file_path)
     controller.loop()
 
 if __name__ == '__main__':
