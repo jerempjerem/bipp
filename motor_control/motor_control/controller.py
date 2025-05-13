@@ -2,7 +2,6 @@
 
 import rclpy
 from rclpy.node import Node
-
 from geometry_msgs.msg import Twist, PointStamped
 from nav_msgs.msg import Odometry
 import time
@@ -65,35 +64,11 @@ class Controller(Node):
         )
         
         # Initialisation des variables de contrôle
-        self._init_control_variables()
-        
-        # Chargement des points de contrôle
-        if (chkpts_file is not None) and chkpts_file.exists():
-            with open(chkpts_file, 'r') as file:
-                self.checkpoints = json.load(file)['pts']
-                self.get_logger().info(f"Points de contrôle chargés: {len(self.checkpoints)}")
-        
-        # Configuration du contrôleur PID
-        self._setup_pid_controller()
-        
-        # Timer pour les logs périodiques
-        self.last_log_time = time.time()
-        self.log_interval = 0.1  # 100ms
-        
-        self.get_logger().info("Contrôleur initialisé avec succès!")
-
-    def _init_control_variables(self):
-        """Initialise les variables de contrôle"""
         self.msg_twist = Twist()
-        self.last_run = time.time()  # Initialiser avec le temps actuel
-        self.interval = 1  # Réduire l'intervalle à 1 seconde
-        self.period = 0.1
-        self.time_paused = 0
-        self.time_res = 0
-        self.paused = False
-        self.index = 0
-        self.number = 0
-        self.current_goal_index = 0  # Ajout d'un index pour suivre le point actuel
+        self.last_run = time.time()
+        self.interval = 1  # Intervalle entre les commandes en secondes
+        self.period = 0.1  # Période de contrôle en secondes
+        self.number = 0    # Compteur pour la stabilité
         
         # Points de contrôle par défaut
         self.checkpoints = [
@@ -103,12 +78,13 @@ class Controller(Node):
             [0, 0, 0, 5]           # Retour au point de départ
         ]
         
-        self.current_pose = np.array([0, 0, 0], dtype=float)
-        self.goal = np.array([0, 0, 0], dtype=float)
-        self.get_logger().info(f"Points de contrôle par défaut: {len(self.checkpoints)}")
-
-    def _setup_pid_controller(self):
-        """Configure le contrôleur PID"""
+        # Chargement des points de contrôle personnalisés si fournis
+        if (chkpts_file is not None) and chkpts_file.exists():
+            with open(chkpts_file, 'r') as file:
+                self.checkpoints = json.load(file)['pts']
+                self.get_logger().info(f"Points de contrôle chargés: {len(self.checkpoints)}")
+        
+        # Configuration du contrôleur PID
         self.pid_a = PID(
             Kp=0.625,
             Ki=0,
@@ -122,19 +98,12 @@ class Controller(Node):
             starting_output=0
         )
         self.pid_a.reset()
-
-    def _log_position(self):
-        """Log la position actuelle toutes les 100ms"""
-        current_time = time.time()
-        if current_time - self.last_log_time >= self.log_interval:
-            self.get_logger().info(
-                f"Position: x={self.current_pose[0]:.3f}m, "
-                f"y={self.current_pose[1]:.3f}m, "
-                f"θ={degrees(self.current_pose[2]):.1f}°, "
-                f"Intervalle={self.interval:.1f}s, "
-                f"Point actuel={self.current_goal_index}/{len(self.checkpoints)}"
-            )
-            self.last_log_time = current_time
+        
+        # État initial du robot
+        self.current_pose = np.array([0, 0, 0], dtype=float)
+        self.goal = np.array([0, 0, 0], dtype=float)
+        
+        self.get_logger().info("Contrôleur initialisé avec succès!")
 
     def odometry_listener_callback(self, msg_odom):
         """
@@ -158,6 +127,14 @@ class Controller(Node):
         # Log de la position toutes les 100ms
         self._log_position()
 
+    def _log_position(self):
+        """Log la position actuelle"""
+        self.get_logger().info(
+            f"Position: x={self.current_pose[0]:.3f}m, "
+            f"y={self.current_pose[1]:.3f}m, "
+            f"θ={degrees(self.current_pose[2]):.1f}°"
+        )
+
     def should_exec(self, now):
         """
         Détermine si une nouvelle commande doit être exécutée.
@@ -168,17 +145,7 @@ class Controller(Node):
         Returns:
             bool: True si une nouvelle commande doit être exécutée
         """
-        if self.paused:
-            self.get_logger().debug("Exécution en pause")
-            return False
-            
-        time_diff = (now - self.last_run)
-        self.get_logger().debug(f"Temps écoulé: {time_diff:.2f}s, Intervalle: {self.interval}s")
-        
-        if time_diff >= self.interval:
-            self.get_logger().info(f"Temps écoulé ({time_diff:.2f}s) >= intervalle ({self.interval}s)")
-            return True
-        return False
+        return (now - self.last_run) > self.interval
 
     def move(self, angle=0, dist=0):
         """
@@ -188,16 +155,13 @@ class Controller(Node):
             angle (float): Angle de rotation en radians
             dist (float): Distance à parcourir en mètres
         """
-        # Calcul et limitation des vitesses
         a_speed = np.clip(angle / self.period, np.radians(-MAX_ANG_SPEED), np.radians(MAX_ANG_SPEED))
         l_speed = np.clip(dist / self.period, -MAX_LIN_SPEED, MAX_LIN_SPEED)
         
-        # Envoi de la commande
         self.msg_twist.linear.x = float(l_speed)
         self.msg_twist.angular.z = float(a_speed)
         self.publisher.publish(self.msg_twist)
         
-        # Log des commandes
         self.get_logger().debug(
             f"Commande: v={l_speed:.3f}m/s, ω={degrees(a_speed):.1f}°/s"
         )
@@ -267,16 +231,13 @@ class Controller(Node):
             
         self.goal = np.array(self.checkpoints.pop(0))
         self.interval = self.goal[3]
-        self.current_goal_index += 1
+        self.last_run = current_ts
         
         self.get_logger().info(
-            f"Nouveau point de contrôle {self.current_goal_index}: "
+            f"Nouveau point de contrôle: "
             f"x={self.goal[0]:.2f}m, y={self.goal[1]:.2f}m, "
             f"θ={degrees(self.goal[2]):.1f}°, intervalle={self.interval}s"
         )
-        
-        # Réinitialiser le temps de dernière exécution
-        self.last_run = current_ts
 
     def step_prep(self, tunings):
         """
@@ -302,11 +263,7 @@ class Controller(Node):
         """
         diff_a = self.pid_a(self.current_pose[2])
         self.move(diff_a, 0)
-        try:
-            rclpy.spin_once(self, timeout_sec=0.1)  # Timeout réduit à 100ms
-        except Exception as e:
-            self.get_logger().warn(f"Erreur lors de spin_once: {str(e)}")
-        
+        rclpy.spin_once(self, timeout_sec=self.period)
         diff_a = self.angle_to_dir(dir)
         self.get_logger().debug(f"Différence d'angle: {degrees(diff_a):.1f}°")
         return diff_a
@@ -335,25 +292,16 @@ class Controller(Node):
         """Oriente le robot vers la cible"""
         self.get_logger().info("Orientation vers la cible")
         self.step_prep((KP, 0, 0))
-        start_time = time.time()
-        max_duration = 10.0  # Timeout de 10 secondes
         
-        while self.number < 20 and (time.time() - start_time) < max_duration:
-            try:
-                diff_a = self.move_a_speed(self.goal_dir())
-                if abs(diff_a) > radians(ANGLE_TOL):
-                    self.number = 0
-                    self.get_logger().debug(f"Angle hors tolérance: {degrees(diff_a):.1f}° > {degrees(ANGLE_TOL):.1f}°")
-                else:
-                    self.pid_a.tunings = (KP, KI, KD)
-                    self.number += 1
-                    self.get_logger().debug(f"Angle dans la tolérance: {degrees(diff_a):.1f}°")
-            except Exception as e:
-                self.get_logger().error(f"Erreur lors de l'orientation: {str(e)}")
-                break
-        
-        if (time.time() - start_time) >= max_duration:
-            self.get_logger().warn("Timeout lors de l'orientation vers la cible")
+        while self.number < 20:
+            diff_a = self.move_a_speed(self.goal_dir())
+            if abs(diff_a) > radians(ANGLE_TOL):
+                self.number = 0
+                self.get_logger().debug(f"Angle hors tolérance: {degrees(diff_a):.1f}° > {degrees(ANGLE_TOL):.1f}°")
+            else:
+                self.pid_a.tunings = (KP, KI, KD)
+                self.number += 1
+                self.get_logger().debug(f"Angle dans la tolérance: {degrees(diff_a):.1f}°")
         
         self.pid_a.auto_mode = False
         self.move(0, 0)
@@ -392,11 +340,8 @@ class Controller(Node):
             rclpy.spin_once(self, timeout_sec=0)
             now = time.time()
             
-            # Log de l'état toutes les 100ms
-            self._log_position()
-            
             if self.should_exec(now):
-                self.get_logger().info(f"Exécution d'une nouvelle commande (point {self.current_goal_index + 1})")
+                self.get_logger().info("Exécution d'une nouvelle commande")
                 if not self.checkpoints:
                     self.get_logger().info("Trajectoire terminée")
                     break
@@ -409,7 +354,12 @@ class Controller(Node):
 def main(args=None):
     """Point d'entrée principal"""
     rclpy.init(args=args)
-    controller = Controller("controller")
+    
+    parser = argparse.ArgumentParser()
+    parser.add_argument("file_path", nargs='?', type=Path, default=None)
+    p = parser.parse_args()
+    
+    controller = Controller(chkpts_file=p.file_path)
     controller.loop()
 
 if __name__ == '__main__':
