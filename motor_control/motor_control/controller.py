@@ -302,7 +302,11 @@ class Controller(Node):
         """
         diff_a = self.pid_a(self.current_pose[2])
         self.move(diff_a, 0)
-        rclpy.spin_once(self, timeout_sec=self.period)
+        try:
+            rclpy.spin_once(self, timeout_sec=0.1)  # Timeout réduit à 100ms
+        except Exception as e:
+            self.get_logger().warn(f"Erreur lors de spin_once: {str(e)}")
+        
         diff_a = self.angle_to_dir(dir)
         self.get_logger().debug(f"Différence d'angle: {degrees(diff_a):.1f}°")
         return diff_a
@@ -331,16 +335,25 @@ class Controller(Node):
         """Oriente le robot vers la cible"""
         self.get_logger().info("Orientation vers la cible")
         self.step_prep((KP, 0, 0))
+        start_time = time.time()
+        max_duration = 10.0  # Timeout de 10 secondes
         
-        while self.number < 20:
-            diff_a = self.move_a_speed(self.goal_dir())
-            if abs(diff_a) > radians(ANGLE_TOL):
-                self.number = 0
-                self.get_logger().debug(f"Angle hors tolérance: {degrees(diff_a):.1f}° > {degrees(ANGLE_TOL):.1f}°")
-            else:
-                self.pid_a.tunings = (KP, KI, KD)
-                self.number += 1
-                self.get_logger().debug(f"Angle dans la tolérance: {degrees(diff_a):.1f}°")
+        while self.number < 20 and (time.time() - start_time) < max_duration:
+            try:
+                diff_a = self.move_a_speed(self.goal_dir())
+                if abs(diff_a) > radians(ANGLE_TOL):
+                    self.number = 0
+                    self.get_logger().debug(f"Angle hors tolérance: {degrees(diff_a):.1f}° > {degrees(ANGLE_TOL):.1f}°")
+                else:
+                    self.pid_a.tunings = (KP, KI, KD)
+                    self.number += 1
+                    self.get_logger().debug(f"Angle dans la tolérance: {degrees(diff_a):.1f}°")
+            except Exception as e:
+                self.get_logger().error(f"Erreur lors de l'orientation: {str(e)}")
+                break
+        
+        if (time.time() - start_time) >= max_duration:
+            self.get_logger().warn("Timeout lors de l'orientation vers la cible")
         
         self.pid_a.auto_mode = False
         self.move(0, 0)
