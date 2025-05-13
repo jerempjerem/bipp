@@ -76,6 +76,10 @@ class Controller(Node):
         # Configuration du contrôleur PID
         self._setup_pid_controller()
         
+        # Timer pour les logs périodiques
+        self.last_log_time = time.time()
+        self.log_interval = 0.1  # 100ms
+        
         self.get_logger().info("Contrôleur initialisé avec succès!")
 
     def _init_control_variables(self):
@@ -118,6 +122,18 @@ class Controller(Node):
         )
         self.pid_a.reset()
 
+    def _log_position(self):
+        """Log la position actuelle toutes les 100ms"""
+        current_time = time.time()
+        if current_time - self.last_log_time >= self.log_interval:
+            self.get_logger().info(
+                f"Position: x={self.current_pose[0]:.3f}m, "
+                f"y={self.current_pose[1]:.3f}m, "
+                f"θ={degrees(self.current_pose[2]):.1f}°, "
+                f"Intervalle={self.interval:.1f}s"
+            )
+            self.last_log_time = current_time
+
     def odometry_listener_callback(self, msg_odom):
         """
         Callback pour les messages d'odométrie.
@@ -137,12 +153,8 @@ class Controller(Node):
             np.mod(angle, 2*np.pi)
         ])
         
-        # Log de la position actuelle
-        self.get_logger().debug(
-            f"Position: x={self.current_pose[0]:.3f}m, "
-            f"y={self.current_pose[1]:.3f}m, "
-            f"θ={degrees(self.current_pose[2]):.1f}°"
-        )
+        # Log de la position toutes les 100ms
+        self._log_position()
 
     def should_exec(self, now):
         """
@@ -360,13 +372,8 @@ class Controller(Node):
             rclpy.spin_once(self, timeout_sec=0)
             now = time.time()
             
-            self.get_logger().debug(
-                f"État: paused={self.paused}, time_res={self.time_res}, "
-                f"checkpoints={len(self.checkpoints)}, "
-                f"position: x={self.current_pose[0]:.3f}m, "
-                f"y={self.current_pose[1]:.3f}m, "
-                f"θ={degrees(self.current_pose[2]):.1f}°"
-            )
+            # Log de l'état toutes les 100ms
+            self._log_position()
             
             if self.should_exec(now):
                 self.get_logger().info("Exécution d'une nouvelle commande")
@@ -378,6 +385,9 @@ class Controller(Node):
                 self.orient_chkpt()
                 self.forward_target()
                 self.orient_target()
+                
+                # Réinitialiser le temps de dernière exécution
+                self.last_run = now
 
 def main(args=None):
     """Point d'entrée principal"""
