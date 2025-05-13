@@ -22,6 +22,7 @@ ANGLE_TOLERANCE = 0.4  # Angle tolerance in radians
 POSITION_TOLERANCE = 0.01  # Position tolerance in meters
 MAX_ANGULAR_SPEED = 40  # Maximum angular speed in degrees/s
 MAX_LINEAR_SPEED = 0.05  # Maximum linear speed in m/s
+ODOMETRY_LOG_INTERVAL = 0.2  # Log odometry every 200ms
 
 # PID controller constants
 KP = 0.5  # Proportional gain
@@ -76,6 +77,8 @@ class Controller(Node):
         self.paused = False
         self.index = 0
         self.number = 0
+        self.last_odometry_log = 0
+        self.checkpoint_start_time = time.time()
 
         # Default checkpoints if no file provided
         self.checkpoints = [
@@ -115,7 +118,7 @@ class Controller(Node):
     def odometry_listener_callback(self, msg_odom: Odometry) -> None:
         """
         Callback for odometry messages.
-        Updates the current pose of the robot.
+        Updates the current pose of the robot and logs odometry data.
         
         Args:
             msg_odom (Odometry): Odometry message containing robot pose
@@ -130,6 +133,17 @@ class Controller(Node):
             msg_odom.pose.pose.position.y,
             np.mod(angle, 2 * np.pi)
         ])
+
+        # Log odometry data every ODOMETRY_LOG_INTERVAL seconds
+        current_time = time.time()
+        if current_time - self.last_odometry_log >= ODOMETRY_LOG_INTERVAL:
+            elapsed_time = current_time - self.checkpoint_start_time
+            self.get_logger().info(
+                f"Odometry - Position: ({self.current_pose[0]:.3f}, {self.current_pose[1]:.3f})m, "
+                f"Orientation: {degrees(self.current_pose[2]):.1f}°, "
+                f"Time since checkpoint: {elapsed_time:.1f}s"
+            )
+            self.last_odometry_log = current_time
 
     def should_exec(self, now: float) -> bool:
         """
@@ -219,6 +233,7 @@ class Controller(Node):
         self.last_run = current_ts
         self.goal = np.array(self.checkpoints.pop(0))
         self.interval = self.goal[3]
+        self.checkpoint_start_time = time.time()  # Reset checkpoint timer
         self.get_logger().info(f"Moving to next checkpoint: {self.goal}")
 
     def step_prep(self, tunings: tuple) -> None:
@@ -322,6 +337,7 @@ class Controller(Node):
         """
         self.goal = np.array(self.checkpoints.pop(0))
         self.interval = self.goal[3]
+        self.checkpoint_start_time = time.time()  # Initialize checkpoint timer
         self.get_logger().info(f"Starting navigation with goal: {self.goal}")
         
         while rclpy.ok():
