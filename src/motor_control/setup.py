@@ -22,6 +22,7 @@ setup(
         'console_scripts': [
             'controller = motor_control.controller:main',
             'twist_interface = motor_control.twist_interface:main',
+            'data_synchronizer = motor_control.data_synchronizer:main',
         ],
     },
 )
