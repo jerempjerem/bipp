@@ -26,7 +26,7 @@ class MasterNode(Node):
         )
 
     def motor_callback(self, msg):
-        self.get_logger().info(f'Received motor data: {msg.data}')
+        self.get_logger().info(f'Received motor data: {msg}')
         # Log or process motor data here
 
     def lidar_callback(self, msg):
