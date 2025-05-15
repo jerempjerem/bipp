@@ -101,7 +101,7 @@ class TwistIF(Node):
             self.twist_listener_callback, 
             10
         )
-        self.publisher = self.create_publisher(Odometry, 'robot_odom', 10)
+        self.publisher = self.create_publisher(Odometry, 'odom', 10)
         self.ser.reset_input_buffer()
 
     def serial_read_bytes(self, length=8):

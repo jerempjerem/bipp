@@ -62,7 +62,7 @@ class Controller(Node):
         self.publisher = self.create_publisher(Twist, 'wheel_instructions_topic', 10)
         self.subscriber = self.create_subscription(
             Odometry, 
-            "robot_odom", 
+            "odom", 
             self.odometry_listener_callback, 
             10
         )
