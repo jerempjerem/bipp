@@ -8,7 +8,6 @@ from message_filters import ApproximateTimeSynchronizer, Subscriber
 
 import math
 import csv
-import os
 
 
 class MasterNode(Node):
