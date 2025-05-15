@@ -18,7 +18,7 @@ import json
 from simple_pid import PID
 
 # Constants for robot control
-ANGLE_TOLERANCE = 0.4  # Angle tolerance in radians
+ANGLE_TOLERANCE = 0.5  # Angle tolerance in radians
 POSITION_TOLERANCE = 0.01  # Position tolerance in meters
 MAX_ANGULAR_SPEED = 40  # Maximum angular speed in degrees/s
 MAX_LINEAR_SPEED = 0.05  # Maximum linear speed in m/s
