@@ -19,10 +19,10 @@ from simple_pid import PID
 
 # Constants for robot control
 ANGLE_TOLERANCE = 0.4  # Angle tolerance in radians
-POSITION_TOLERANCE = 0.05  # Position tolerance in meters
+POSITION_TOLERANCE = 0.02  # Position tolerance in meters
 MAX_ANGULAR_SPEED = 40  # Maximum angular speed in degrees/s
-MAX_LINEAR_SPEED = 0.05  # Maximum linear speed in m/s
-ODOMETRY_LOG_INTERVAL = 0.2  # Log odometry every 200ms
+MAX_LINEAR_SPEED = 0.07  # Maximum linear speed in m/s
+ODOMETRY_LOG_INTERVAL = 0.1  # Log odometry every 200ms
 
 # PID controller constants
 KP = 0.5  # Proportional gain
